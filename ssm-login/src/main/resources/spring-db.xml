@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:context="http://www.springframework.org/schema/context" 
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+		http://www.springframework.org/schema/context
+		http://www.springframework.org/schema/context/spring-context-4.0.xsd
+		http://www.springframework.org/schema/tx
+		http://www.springframework.org/schema/tx/spring-tx-4.0.xsd
+		http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop-4.0.xsd">
+        
+     <context:property-placeholder location="classpath:config.properties" />
+     <!-- 自定义自定义的日志存储 -->
+    <bean id ="localStatLogger" class ="com.ssm.druid.LocalStatLogger" ></bean>  
+      <!-- 配置数据库连接池 druid：alibaba    数据库连接池：c3p0、jndi、druid-->  
+	<bean id="parentDataSource" class="com.alibaba.druid.pool.DruidDataSource"   destroy-method="close">
+        <!-- 配置初始化大小、最小、最大 -->  
+	    <property name="initialSize" value="1" />  
+	    <property name="minIdle" value="1" />   
+	    <property name="maxActive" value="20" />  
+	   
+	    <!-- 配置获取连接等待超时的时间 -->  
+	    <property name="maxWait" value="60000" />  	   
+	    <!-- 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒 -->  
+	    <property name="timeBetweenEvictionRunsMillis" value="60000" />  
+	   <!-- 自定义实现输入监控数据到日志 -->
+		<property name ="statLogger" ref ="localStatLogger" />
+	    <!-- 配置一个连接在池中最小生存的时间，单位是毫秒 -->  
+	    <property name="minEvictableIdleTimeMillis" value="300000" />    
+	    <!-- 检测连接是否可用 -->
+	    <property name="validationQuery" value="SELECT 'x'" />  
+	    <!-- 当连接空闲的时候测试 -->
+	    <property name="testWhileIdle" value="true" /> 
+	    <!-- 连接被借用的时候不测试 --> 
+	    <property name="testOnBorrow" value="true" />  
+	    <!-- 连接被归还的时候不测试 -->
+	    <property name="testOnReturn" value="true" />
+	    
+	    <!-- 开启监控功能 -->
+	    <!-- 配置监控统计拦截的filters，去掉后监控界面sql无法统计 -->  
+    	<property name="filters" value="stat" />
+    </bean>
+	
+	 <!-- 主数据源-->  
+    <bean id="masterDataSource" parent="parentDataSource">  
+        <property name="url" value="jdbc:mysql://127.0.0.1:3307/sys" />
+		<property name="username" value="root" />
+		<property name="password" value="" /> 
+	</bean>
+	
+	 <!-- 从数据源-->  
+    <bean id="slaveDataSource" parent="parentDataSource">  
+        <property name="url" value="jdbc:mysql://127.0.0.1:3308/sys" />
+		<property name="username" value="root" />
+		<property name="password" value="" /> 
+
+    </bean>  
+    <!-- druid end -->
+    
+    <bean id="dataSource" class="com.ssm.controller.aop.DynamicDataSource">  
+        <property name="targetDataSources">  
+            <map key-type="java.lang.String">  
+                <entry key="slave" value-ref="slaveDataSource" />  
+            </map>  
+        </property>  
+        <property name="defaultTargetDataSource" ref="masterDataSource" />  
+    </bean> 
+
+
+	
+	
+	<!-- 切换数据源 -->  
+    <bean id="dataSourceAdvice" class="com.ssm.controller.aop.DataSourceAdvice" />  
+    <aop:config>  
+        <aop:advisor  
+            pointcut="execution(* com.ssm.service..*Impl.*(..))"  
+            advice-ref="dataSourceAdvice" />  
+    </aop:config>  
+
+
+
+</beans> 
